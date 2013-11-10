@@ -76,6 +76,8 @@ public class Factor_SQUFOF implements FactorMethod {
 			if(task.isTimeout()) {
 				return null;
 			}
+			if(Q1.equals(BigInteger.ZERO))
+				return BigInteger.ONE;
 			
 			BigInteger bi = sqrkn.add(P0).divide(Q1);
 			P1 = bi.multiply(Q1).subtract(P0);
@@ -130,7 +132,7 @@ public class Factor_SQUFOF implements FactorMethod {
 	 * @param args
 	 */
 	public static void main(String[] args) {
-		BigInteger N = new BigInteger("1827368123871231");
+		BigInteger N = new BigInteger("1827368123");
 		
 		if(N.isProbablePrime(20)) {
 			System.out.println(N);
