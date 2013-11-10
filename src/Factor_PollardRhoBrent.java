@@ -20,7 +20,7 @@ public class Factor_PollardRhoBrent implements FactorMethod {
     
     private BigInteger MAXITERS = new BigInteger("100000000");
     
-    private Random random = new Random(1339);
+    private Random random = new Random(13133937);
     
     private BigInteger f(BigInteger y, BigInteger C, BigInteger n)
     {

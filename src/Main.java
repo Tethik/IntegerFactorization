@@ -13,8 +13,8 @@ import java.util.List;
  */
 public class Main {
    
-    public static boolean DEBUG = true;
-    public static long totalTimeout = 14000;
+    public static boolean DEBUG = false;
+    public static long totalTimeout = 14500;
     public static Stopwatch globalTimer = new Stopwatch();
     
     public static boolean DoBackupPlan = true;
@@ -22,6 +22,7 @@ public class Main {
     public static boolean Do_Sort_After_Division_First = true;
     public static boolean Do_Reverse_Sort = false;
 
+    public static boolean switchYes = false;
     
     public static int sieveLimit = 500;
     public static int BackupTimeThreshold = 20;
@@ -36,6 +37,7 @@ public class Main {
 //    public static FactorMethod f = new Factor_PollardRhoBrent();
     //public static FactorMethod f = new Factor_TrialPerfectRhoBrent(sieveLimit);
     public static FactorMethod f = new Factor_PerfectRhoBrent();
+    //public static FactorMethod f = new Factor_SQUFOF();
     
     public static void main(String args[]) throws IOException {
         
@@ -107,22 +109,84 @@ public class Main {
         int tasksleft = tasks.size();
         long timeleft = totalTimeout - globalTimer.milliseconds();
         dPrintln("Time left for work is " + timeleft + "ms");
+        
+        List<Task> failedTasks = new ArrayList<>();
+        int i = 0;
         for(Task t: tasks)
         {
-        	
+                
             long timeout = getNextTimeoutDuration(timeleft, tasksleft);
             t.setNewTimout(new Timing(timeout));
             dPrint("Task-" + t.index + "(" + t.initial + ") was allocated " + timeout + "ms working time" );
             // Work!
             f.factor(t);
-            
             t.timer.stop();
-            results[t.index] = t;            
-            timeleft -= t.getExecutionTime();
+            if(t.isTimeout())
+                failedTasks.add(t);
+            results[t.index] = t;        
+            //timeleft -= t.getExecutionTime();
+            timeleft = totalTimeout - globalTimer.milliseconds();
             dPrintln("Task-" + t.index + " executed for " + t.getExecutionTime() + "ms");
             tasksleft--;
         }
+        
+        if(DoBackupPlan)
+        {
+            //f = new Factor_PollardRhoBrent();
+            f = new Factor_SQUFOF();
+            doBackupWork(failedTasks);
+        }
+        
         return results;
+    }
+
+    public static void doBackupWork(List<Task> tasks)
+    {
+        long timeleft = totalTimeout - globalTimer.milliseconds();
+//        System.out.println("Backup for " + timeleft + "ms. Failed tasks count is " + tasks.size());
+        if(tasks.size() == 0 || timeleft/tasks.size() < BackupTimeThreshold)
+        {
+            return;
+        }
+        
+        if(Do_Sort_After_Division_First)
+        {
+            Task.REVERSE_SORT = !Task.REVERSE_SORT;
+            Collections.sort(tasks);
+        }
+        
+//        System.out.println("Starting backup!");
+        int tasksleft = tasks.size();
+        List<Task> failedTasks = new ArrayList<>();
+        dPrintln("REDO of factoring!");
+        dPrintln("Time left for backup work is " + timeleft + "ms");
+        for(Task t: tasks)
+        {
+            long timeout = getNextTimeoutDuration(timeleft, tasksleft);
+            t.setNewTimout(new Timing(timeout));
+            dPrint("Task-" + t.index + "(" + t.initial + ") was allocated " + timeout + "ms working time" );
+            // Work!
+            f.factor(t);
+            t.timer.stop();
+            if(t.isTimeout())
+                failedTasks.add(t);
+            else if(t.isFinished())
+                dPrintln("SOLVED one in backup plan phase");
+            //results[t.index] = t;            
+            timeleft = totalTimeout - globalTimer.milliseconds();
+            dPrintln("Task-" + t.index + " executed for " + t.getExecutionTime() + "ms");
+            tasksleft--;
+        }
+        
+        timeleft = totalTimeout - globalTimer.milliseconds();
+//      System.out.println("Next time slice is " + timeleft + "ms. Failed tasks count is " + failedTasks.size());
+        
+        if(switchYes)
+        {
+            switchYes = false;
+            f = new Factor_PollardRhoBrent();
+        }
+        doBackupWork(failedTasks);
     }
     
     
