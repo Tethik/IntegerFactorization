@@ -5,7 +5,9 @@ import java.io.InputStreamReader;
 import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedList;
 import java.util.List;
+import java.util.Queue;
 
 /**
  *
@@ -14,30 +16,23 @@ import java.util.List;
 public class Main {
    
     public static boolean DEBUG = false;
-    public static long totalTimeout = 14500;
+    public static long totalTimeout = 10900;
     public static Stopwatch globalTimer = new Stopwatch();
     
-    public static boolean DoBackupPlan = true;
     public static boolean Do_Division_First = true; //true;
-    public static boolean Do_Sort_After_Division_First = true;
-    public static boolean Do_Reverse_Sort = false;
-
-    public static boolean switchYes = false;
+    public static boolean Sort = true;
+    public static boolean Do_Reverse_Sort = true;
+    
+    public static boolean PerfectSquareCheck = true;
+    public static boolean TrialDivisionCheck = true;
     
     public static int sieveLimit = 500;
     public static int BackupTimeThreshold = 20;
     
-    //public static FactorMethod f = new Factor_PollardRho();
-    //public static FactorMethod f = new Factor_TrialDivision(sieveLimit);
-    //public static FactorMethod f = new Factor_TrialPollardRho(sieveLimit);
-//    public static FactorMethod f = new Factor_PerfectPollardRho();
-    //public static FactorMethod f = new Factor_TrialPerfectRho(sieveLimit);
     
-//    public static FactorMethod f = new Factor_TrialRhoBrent(sieveLimit);
-//    public static FactorMethod f = new Factor_PollardRhoBrent();
-    //public static FactorMethod f = new Factor_TrialPerfectRhoBrent(sieveLimit);
-    public static FactorMethod f = new Factor_PerfectRhoBrent();
-    //public static FactorMethod f = new Factor_SQUFOF();
+    public static boolean isTimeout() {
+    	return globalTimer.milliseconds() >= totalTimeout;
+    }
     
     public static void main(String args[]) throws IOException {
         
@@ -48,7 +43,7 @@ public class Main {
         String line = read.readLine();
         
         globalTimer.start();
-        
+        Timing timer =  new Timing(totalTimeout);
         int i = 0;
         while(true) 
         {
@@ -56,23 +51,59 @@ public class Main {
                 break;
             }
             BigInteger b = new BigInteger(line.trim());
-            Task t = new Task(i++, b, null);
+            Task t = new Task(i++, b, timer);
             tasks.add(t);
             line = read.readLine();
         }
-        Task[] results;
-        if(Do_Division_First)
-            results = doWorkDivFirst(tasks);
-        else
-            results = doWork(tasks);
         
-        printResults(results);
+        int tasks_finished = 0;
+        if(Do_Division_First)
+        	tasks_finished = doWorkDivFirst(tasks);
+        
+        Factor_PerfectGeometry geo = new Factor_PerfectGeometry();
+        Factor_PollardRhoBrent pollard = new Factor_PollardRhoBrent();
+        while(tasks_finished < tasks.size() && !isTimeout()) {   
+        	
+        	dPrintln("# No solved: " + tasks_finished + " R: " + pollard.getRValue());
+            if(Sort) {
+            	Collections.sort(tasks);
+            }
+        	
+        	for(Task task : tasks) {
+        		if(task.isFinished())
+        			continue;
+        		
+	        	if(PerfectSquareCheck) {
+	        		geo.factor(task);
+	        	}
+	        	
+	        	if(task.isFinished()) {
+	        		tasks_finished++;
+        			continue;
+	        	}
+	        	
+	        	removePrimes(task);
+	        	
+	        	pollard.factor(task);
+	        	
+	        	removePrimes(task);
+	        	
+	        	if(task.isFinished())
+	        		tasks_finished++;
+        	}
+        	
+        	
+        	
+        	pollard.doubleRValue();
+        }
+        
+        printResults(tasks);
         
         if(DEBUG) 
         {
             int finished = 0;
-            for (Task result : results) {
-                if (!result.isTimeout() && result.isFinished()) {
+            for (Task result : tasks) {
+                if (result.isFinished()) { //  && !result.isTimeout() ) {
                     finished++;
                 }
                 else {
@@ -80,121 +111,55 @@ public class Main {
                     dPrintln("  " + result);
                 }
             }
-            dPrintln("Finished " + finished + "/"+ results.length);
+            dPrintln("Finished " + finished + "/"+ tasks.size());
             dPrintln("Executed for " + globalTimer.stop().milliseconds() + "ms");
         }
         
         
     }
     
-    public static Task[] doWorkDivFirst(List<Task> tasks)
+    public static void removePrimes(Task task) {
+    	Queue<BigInteger> todo = new LinkedList<>();
+    	
+    	while(!task.isFinished()) {    		
+	        BigInteger toFactor = task.poll();
+	        
+	        if (toFactor.isProbablePrime(20)) { 
+	            task.setPartResult(toFactor);
+	            continue;
+	        }
+	        
+	        if(toFactor.equals(BigInteger.ONE)) continue;
+	        
+	        todo.add(toFactor);
+    	}
+    	
+    	for(BigInteger t : todo)
+    		task.push(t);
+    	
+    	
+    }
+    
+    public static int doWorkDivFirst(List<Task> tasks)
     {
         FactorMethod fStart = new Factor_TrialDivision(sieveLimit);
         
+        int tasks_finished = 0;
         for(Task task:tasks)
         {
             fStart.factor(task);
-        }
-        
-        if(Do_Sort_After_Division_First)
-        	Collections.sort(tasks);
-        
-        Task[] results = doWork(tasks);
-        return results;
-    }
-    
-    public static Task[] doWork(List<Task> tasks)
-    {
-        Task[] results = new Task[tasks.size()];
-        int tasksleft = tasks.size();
-        long timeleft = totalTimeout - globalTimer.milliseconds();
-        dPrintln("Time left for work is " + timeleft + "ms");
-        
-        List<Task> failedTasks = new ArrayList<>();
-        int i = 0;
-        for(Task t: tasks)
-        {
-                
-            long timeout = getNextTimeoutDuration(timeleft, tasksleft);
-            t.setNewTimout(new Timing(timeout));
-            dPrint("Task-" + t.index + "(" + t.initial + ") was allocated " + timeout + "ms working time" );
-            // Work!
-            f.factor(t);
-            t.timer.stop();
-            if(t.isTimeout())
-                failedTasks.add(t);
-            results[t.index] = t;        
-            //timeleft -= t.getExecutionTime();
-            timeleft = totalTimeout - globalTimer.milliseconds();
-            dPrintln("Task-" + t.index + " executed for " + t.getExecutionTime() + "ms");
-            tasksleft--;
-        }
-        
-        if(DoBackupPlan)
-        {
-            //f = new Factor_PollardRhoBrent();
-            f = new Factor_SQUFOF();
-            doBackupWork(failedTasks);
-        }
-        
-        return results;
-    }
+            if(task.isFinished())
+            	tasks_finished++;
+        }       
 
-    public static void doBackupWork(List<Task> tasks)
-    {
-        long timeleft = totalTimeout - globalTimer.milliseconds();
-//        System.out.println("Backup for " + timeleft + "ms. Failed tasks count is " + tasks.size());
-        if(tasks.size() == 0 || timeleft/tasks.size() < BackupTimeThreshold)
-        {
-            return;
-        }
-        
-        if(Do_Sort_After_Division_First)
-        {
-            Task.REVERSE_SORT = !Task.REVERSE_SORT;
-            Collections.sort(tasks);
-        }
-        
-//        System.out.println("Starting backup!");
-        int tasksleft = tasks.size();
-        List<Task> failedTasks = new ArrayList<>();
-        dPrintln("REDO of factoring!");
-        dPrintln("Time left for backup work is " + timeleft + "ms");
-        for(Task t: tasks)
-        {
-            long timeout = getNextTimeoutDuration(timeleft, tasksleft);
-            t.setNewTimout(new Timing(timeout));
-            dPrint("Task-" + t.index + "(" + t.initial + ") was allocated " + timeout + "ms working time" );
-            // Work!
-            f.factor(t);
-            t.timer.stop();
-            if(t.isTimeout())
-                failedTasks.add(t);
-            else if(t.isFinished())
-                dPrintln("SOLVED one in backup plan phase");
-            //results[t.index] = t;            
-            timeleft = totalTimeout - globalTimer.milliseconds();
-            dPrintln("Task-" + t.index + " executed for " + t.getExecutionTime() + "ms");
-            tasksleft--;
-        }
-        
-        timeleft = totalTimeout - globalTimer.milliseconds();
-//      System.out.println("Next time slice is " + timeleft + "ms. Failed tasks count is " + failedTasks.size());
-        
-        if(switchYes)
-        {
-            switchYes = false;
-            f = new Factor_PollardRhoBrent();
-        }
-        doBackupWork(failedTasks);
+        return tasks_finished;
     }
     
-    
-    public static void printResults(Task[] tasks)
+    public static void printResults(List<Task> tasks)
     {
         for(Task task : tasks)
         {
-            if(!task.isTimeout() && task.isFinished()) {
+            if(task.isFinished()) { // !task.isTimeout()
                 for(BigInteger b: task.getResults())
                 {
                     System.out.println(b);
@@ -206,12 +171,7 @@ public class Main {
             System.out.println(""); 
         }
     }
-    
-    public static long getNextTimeoutDuration(long totalTime, long numTasksLeft)
-    {
-        return totalTime/numTasksLeft;
-    }
-    
+
     public static void dPrint(String s)
     {
         if(DEBUG)

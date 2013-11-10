@@ -1,5 +1,7 @@
 
 import java.math.BigInteger;
+import java.util.LinkedList;
+import java.util.Queue;
 import java.util.Random;
 
 /*
@@ -13,27 +15,30 @@ import java.util.Random;
  */
 public class Factor_PollardRhoBrent implements FactorMethod {
     
-    private BigInteger TEN = BigInteger.TEN;
-    private BigInteger TWO = new BigInteger("2");
     private BigInteger ONE = BigInteger.ONE;
-    private BigInteger ZERO = BigInteger.ZERO;
+    private BigInteger C;
+    private int R_Value = 64;
     
-    private BigInteger MAXITERS = new BigInteger("100000000");
+    
+    public int getRValue() {
+    	return R_Value;
+    }
+    
+    public Factor_PollardRhoBrent() {
+    	C = new BigInteger(32, random);
+    }
+    
+    
+    public void doubleRValue() {
+    	C = new BigInteger(32, random);    	
+    	R_Value *= 2;    	
+    }
+    
     
     private Random random = new Random(13133937);
     
-    private BigInteger f(BigInteger y, BigInteger C, BigInteger n)
-    {
-        return ((y.multiply(y)).add(C)).mod(n);
-    }
     
-    public BigInteger factorizebrent(Task task, BigInteger n) {
-        
-//        if(n.mod(TWO).equals(ZERO))
-//        {
-//            return TWO;
-//        }
-        
+    public BigInteger factorizebrent(Task task, BigInteger n) {        
         BigInteger x = null;
 
         int m = random.nextInt(100)+1; 
@@ -41,10 +46,12 @@ public class Factor_PollardRhoBrent implements FactorMethod {
         int r= 1;    
         BigInteger z = new BigInteger(n.bitCount(), random);
         BigInteger q=ONE;
-        BigInteger C = new BigInteger(n.bitCount(), random);
+        
         BigInteger y = z;
+        
+        
    
-        do {        	
+        do {        
         	
             x=y;
             for (int i = 0; i <= r; ++i) 
@@ -52,7 +59,7 @@ public class Factor_PollardRhoBrent implements FactorMethod {
             
             int k = 0;
             do {    
-            	if(task.isTimeout())
+            	if(r > R_Value || task.isTimeout())
                 {
                     return null;
                 }
@@ -71,130 +78,27 @@ public class Factor_PollardRhoBrent implements FactorMethod {
             
         } while (z.compareTo(ONE)==0);
 
-//        if(z.equals(ONE)) {
-//            return null;
-//        }
-        
-//        if (z.compareTo(n)==0)  {
-//        	return null;
-////            do {
-////                ys = ((y.multiply(y)).add(C)).mod(n); 
-////                z = n.gcd(ys.subtract(x));
-////            } while (z.compareTo(ONE)==0);
-//        }
-        
         return z;
-    }
-    
-//    public BigInteger factorizebrent(Task task, BigInteger n) {
-//        
-//        if(n.mod(TWO).equals(ZERO))
-//        {
-//            return TWO;
-//        }
-//        
-////        BigInteger k = null;
-////        BigInteger i = null;
-//        BigInteger x = null;
-//        BigInteger ys = null;
-//
-//        int m = random.nextInt(10)+1; 
-////        BigInteger m = BigInteger.valueOf(tmp);
-//        int r= 1;    
-//        BigInteger z=new BigInteger(n.bitCount(), random);
-//        BigInteger q=ONE;
-//        
-//        
-//        BigInteger C = new BigInteger(n.bitCount(), random);
-//
-//        BigInteger y = z;
-//        
-//        do {
-//            x=y;
-//            for (int i = 0; i <= r; ++i) 
-//                y = y.multiply(y).add(C).mod(n); 
-//            
-//            int k = 0;
-//            do {
-//                if(task.isTimeout())
-//                {
-//                    return null;
-//                }
-//                
-//                // System.out.print("iter=" + iter.toString() + '\r');
-////                ys=y;
-//                int rk = r-k;
-//                for (int i=1; i <= Math.min(m, rk); ++i) {
-//                    y = y.multiply(y).add(C).mod(n); 
-//                    q = ((y.subtract(x)).multiply(q)).mod(n);
-//                }
-//                z = n.gcd(q);
-//                k += m;
-//            } while (k < r && z.compareTo(ONE) == 0);
-//            r = r*2;
-//        } while (z.compareTo(ONE)==0);
-//
-////        if(z.equals(ONE)) {
-////            return null;
-////        }
-//        
-//        if (z.compareTo(n)==0)  {
-//        	return null;
-////            do {
-////                ys = ((y.multiply(y)).add(C)).mod(n); 
-////                z = n.gcd(ys.subtract(x));
-////            } while (z.compareTo(ONE)==0);
-//        }
-//        
-//        return z;
-//    }
-//    
-    private BigInteger min(BigInteger v1, BigInteger v2)
-    {
-        if(v1.compareTo(v2) > 1)
-        {
-            return v2;
-        }
-        return v1;
     }
     
     @Override
     public void factor(Task task) {
+    	Queue<BigInteger> newTasks = new LinkedList<>();
     	while(!task.isFinished()) {    		
-	        BigInteger toFactor = task.poll();
-//	        System.out.println(toFactor);
-	        
-	        if (toFactor.isProbablePrime(20)) { 
-	            task.setPartResult(toFactor);
-	            continue;
-	        }
-	        if(toFactor.equals(BigInteger.ONE)) continue;
-                if(task.isTimeout())
-                {
-                    task.push(toFactor);
-                    return;
-                }
+	        BigInteger toFactor = task.poll();	     
                 
-	        BigInteger divisor = null;
-	        while(true)
-	        {
-                    divisor = factorizebrent(task, toFactor);
-                    if(task.isTimeout())
-                    {
-                        task.push(toFactor);
-                        return;
-                    }
-                    if(divisor == null)
-                        continue;
-                    if(!divisor.equals(toFactor))
-                        break;
-//                    System.out.println(divisor);
+	        BigInteger divisor = factorizebrent(task, toFactor);
+	        
+	        if(divisor == null || divisor.equals(toFactor))
+	        	newTasks.add(toFactor);
+	        else {	        
+		        newTasks.add(divisor);
+		        newTasks.add(toFactor.divide(divisor));
 	        }
-	        task.push(divisor);	   
-//	        factor(task);
-	        task.push(toFactor.divide(divisor));	   
-//	        factor(task);
     	}
+    	
+    	for(BigInteger todo : newTasks)
+    		task.push(todo);
     }
     
     public static void main(String[] args)
